@@ -7,14 +7,19 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,26 +30,33 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -53,32 +65,23 @@ import com.example.shutthebox.ui.theme.ShutTheBoxTheme
 // ---------------------------------------------------------------------------
 // Design tokens
 // ---------------------------------------------------------------------------
-private val BgCream      = Color(0xFFF5E6D0)
-private val TileOpen     = Color(0xFF7B4120)
-private val TileSelected = Color(0xFFF59E0B)
-private val TileClosed   = Color(0xFFCCBCAA)
-private val PillBg       = Color(0xFFEDD9BC)
-private val PillBgActive = Color(0xFFB5743A)
-private val PillText     = Color(0xFF3B1A05)
-private val DotInk       = Color(0xFF2B1600)
-private val OkayActive   = Color(0xFF2E7D32)
-private val OkayDisabled = Color(0xFFBDBDBD)
+private val BgCream       = Color(0xFFF5E6D0)
+private val WoodDark      = Color(0xFF4E2B0E)
+private val TileOpen      = Color(0xFF7B4120)
+private val TileSelected  = Color(0xFFF59E0B)
+private val TileClosed    = Color(0xFFCCBCAA)
+private val WoodContainer = Color(0xFFEDD9BC)
+private val PillBg        = Color(0xFFEDD9BC)
+private val PillBgActive  = Color(0xFFB5743A)
+private val PillText      = Color(0xFF3B1A05)
+private val DotInk        = Color(0xFF2B1600)
+private val CedarRed      = Color(0xFF8B2500)
+private val WinGold       = Color(0xFFFFD700)
+private val OkayActive    = Color(0xFF2E7D32)
+private val OkayDisabled  = Color(0xFFBDBDBD)
 
 // ---------------------------------------------------------------------------
 // GameSoundManager
-//
-// All sounds live in app/src/main/res/raw/ (WAV/MP3/OGG only – AIFF is not
-// supported by Android's SoundPool).
-//
-// Loaded files:
-//   dice_roll_1.wav / dice_roll_3.wav  – rolled dice (picked randomly)
-//   single_drop.wav                    – 1 tile selected (soft tap feedback)
-//   single_drop / two_drops /
-//   three_drops / four_drops .wav      – tiles confirmed & shut (by count)
-//   setup_board.wav                    – board reset after game over
-//
-// Note: dice_roll_2.aiff / dice_roll_3.aiff are present but NOT loaded –
-//       Android does not support the AIFF format.
 // ---------------------------------------------------------------------------
 private class GameSoundManager(context: Context) {
 
@@ -94,14 +97,12 @@ private class GameSoundManager(context: Context) {
 
     private val loadedIds = mutableSetOf<Int>()
 
-    // Dice sounds – three variants, picked randomly on each roll
     private val diceIds = listOf(
         soundPool.load(context, R.raw.dice_roll_1, 1),
         soundPool.load(context, R.raw.dice_roll_2, 1),
         soundPool.load(context, R.raw.dice_roll_3, 1),
     )
 
-    // Drop sounds indexed by tile count (1–4)
     private val dropIds = mapOf(
         1 to soundPool.load(context, R.raw.single_drop,  1),
         2 to soundPool.load(context, R.raw.two_drops,    1),
@@ -117,17 +118,10 @@ private class GameSoundManager(context: Context) {
         }
     }
 
-    /** Called when the dice are rolled. */
-    fun playDiceRoll() = play(diceIds.random())
-
-    /** Subtle tap feedback when a tile is selected or deselected. */
-    fun playTileSelect() = play(dropIds[1]!!, volume = 0.35f)
-
-    /** Full drop sound when tiles are actually shut. [count] = 1..4+. */
-    fun playTilesClose(count: Int) = play(dropIds[count.coerceIn(1, 4)]!!)
-
-    /** Played when the board is reset for a new game. */
-    fun playBoardSetup() = play(setupId)
+    fun playDiceRoll()              = play(diceIds.random())
+    fun playTileSelect()            = play(dropIds[1]!!, volume = 0.35f)
+    fun playTilesClose(count: Int)  = play(dropIds[count.coerceIn(1, 4)]!!)
+    fun playBoardSetup()            = play(setupId)
 
     private fun play(id: Int, volume: Float = 1f) {
         if (id in loadedIds) soundPool.play(id, volume, volume, 0, 0, 1f)
@@ -154,25 +148,16 @@ class MainActivity : ComponentActivity() {
                 val state by vm.uiState.collectAsState()
                 GameScreen(
                     state                = state,
-                    onRollDice           = {
-                        soundManager.playDiceRoll()
-                        vm.rollDice()
-                    },
-                    onToggleTile         = { tile ->
-                        soundManager.playTileSelect()
-                        vm.toggleTile(tile)
-                    },
+                    onRollDice           = { soundManager.playDiceRoll(); vm.rollDice() },
+                    onToggleTile         = { tile -> soundManager.playTileSelect(); vm.toggleTile(tile) },
                     onPreviewCombination = vm::previewCombination,
                     onConfirm            = {
-                        // Capture count BEFORE the state is mutated by the ViewModel
                         val count = state.selectedTiles.size
                         soundManager.playTilesClose(count)
                         vm.confirmSelection()
                     },
-                    onReset              = {
-                        soundManager.playBoardSetup()
-                        vm.reset()
-                    },
+                    onReset              = { soundManager.playBoardSetup(); vm.reset() },
+                    onToggleHighscores   = vm::toggleHighscores,
                 )
             }
         }
@@ -185,7 +170,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // ---------------------------------------------------------------------------
-// GameScreen – stateless
+// GameScreen – stateless root
 // ---------------------------------------------------------------------------
 
 @Composable
@@ -196,55 +181,72 @@ fun GameScreen(
     onPreviewCombination: (List<Int>) -> Unit,
     onConfirm: () -> Unit,
     onReset: () -> Unit,
+    onToggleHighscores: () -> Unit,
 ) {
+    // Win-glow animation: 0 → 1 over 1.2 s when all tiles are shut
+    val winProgress by animateFloatAsState(
+        targetValue      = if (state.isWinner) 1f else 0f,
+        animationSpec    = tween(1200, easing = FastOutSlowInEasing),
+        label            = "winProgress",
+    )
+
+    if (state.showHighscores) {
+        HighscoreScreen(highscores = state.highscores, onBack = onToggleHighscores)
+        return
+    }
+
     Scaffold(containerColor = BgCream) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Text(
-                text  = "Shut the Box",
-                style = MaterialTheme.typography.headlineLarge,
-                color = TileOpen,
-            )
 
-            // Tile row 1..9
+            // ── Header: logo + highscore button ──────────────────────────────
             Row(
                 modifier             = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment    = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
+                GameLogo()
+                HighscoreIconButton(onClick = onToggleHighscores)
+            }
+
+            // ── Tile row 1–9 (weight-based, scales with screen) ─────────────
+            Row(modifier = Modifier.fillMaxWidth()) {
                 for (tile in 1..9) {
                     TileCell(
-                        number     = tile,
-                        isOpen     = tile in state.openTiles,
-                        isSelected = tile in state.selectedTiles,
-                        onClick    = { onToggleTile(tile) },
+                        modifier    = Modifier.weight(1f),
+                        number      = tile,
+                        isOpen      = tile in state.openTiles,
+                        isSelected  = tile in state.selectedTiles,
+                        winProgress = winProgress,
+                        onClick     = { onToggleTile(tile) },
                     )
                 }
             }
 
-            // Two graphical dice
+            // ── Two dice ────────────────────────────────────────────────────
             if (state.dice != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    DieFace(value = state.dice.first)
-                    DieFace(value = state.dice.second)
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    DieFace(value = state.dice.first,  tileSize = 90.dp)
+                    DieFace(value = state.dice.second, tileSize = 90.dp)
                 }
             }
 
-            // Combination pills + Okay button
+            // ── Combination pills + Okay button ─────────────────────────────
             if (state.availableCombinations.isNotEmpty()) {
                 Row(
-                    modifier             = Modifier.fillMaxWidth(),
-                    verticalAlignment    = Alignment.CenterVertically,
+                    modifier          = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(
-                        modifier              = Modifier.weight(1f),
-                        verticalArrangement   = Arrangement.spacedBy(8.dp),
+                        modifier            = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         state.availableCombinations.forEach { combo ->
                             CombinationPill(
@@ -259,35 +261,46 @@ fun GameScreen(
                 }
             }
 
-            // Roll button
+            // ── Roll button ──────────────────────────────────────────────────
             Button(
                 onClick  = onRollDice,
                 enabled  = !state.hasRolled && !state.isGameOver,
                 colors   = ButtonDefaults.buttonColors(containerColor = TileOpen),
                 shape    = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
             ) {
-                Text("Würfeln", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(
+                    "Würfeln",
+                    fontWeight = FontWeight.Bold,
+                    fontSize   = 18.sp,
+                    fontFamily = FontFamily.Serif,
+                )
             }
 
-            // Game Over card
-            if (state.isGameOver) {
+            // ── Loss card (no dialog – only shown when game ends without win) ─
+            if (state.isGameOver && !state.isWinner) {
                 Card(
                     colors   = CardDefaults.cardColors(containerColor = Color(0xFFFFDACC)),
                     shape    = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(
-                        modifier              = Modifier.padding(24.dp).fillMaxWidth(),
-                        horizontalAlignment   = Alignment.CenterHorizontally,
-                        verticalArrangement   = Arrangement.spacedBy(12.dp),
+                        modifier            = Modifier.padding(24.dp).fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Text(
-                            text  = if (state.openTiles.isEmpty()) "Perfekt!" else "Spiel vorbei",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = PillText,
+                            "Spiel vorbei",
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Bold,
+                            fontSize   = 24.sp,
+                            color      = CedarRed,
                         )
-                        Text("Punkte: ${state.score}", fontSize = 22.sp, color = PillText)
+                        Text(
+                            "${state.score} Punkte offen",
+                            fontSize = 20.sp,
+                            color    = PillText,
+                        )
                         Button(
                             onClick = onReset,
                             colors  = ButtonDefaults.buttonColors(containerColor = TileOpen),
@@ -299,31 +312,97 @@ fun GameScreen(
             Spacer(Modifier.height(8.dp))
         }
     }
+
+    // ── Win dialog – rendered as a Dialog overlay by Compose ────────────────
+    if (state.isWinner) {
+        WinDialog(
+            turnCount         = state.turnCount,
+            onNewGame         = onReset,
+            onShowHighscores  = onToggleHighscores,
+        )
+    }
 }
 
 // ---------------------------------------------------------------------------
-// TileCell – haptic on every tap
+// GameLogo
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun GameLogo() {
+    Column(horizontalAlignment = Alignment.Start) {
+        Text(
+            text       = "SHUT THE",
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Normal,
+            fontSize   = 14.sp,
+            letterSpacing = 4.sp,
+            color      = WoodDark,
+        )
+        Text(
+            text       = "BOX",
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize   = 42.sp,
+            letterSpacing = 4.sp,
+            color      = TileOpen,
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// HighscoreIconButton
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun HighscoreIconButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(TileOpen.copy(alpha = 0.12f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("🏆", fontSize = 24.sp)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TileCell – weight-based, CedarRed border when selected, gold glow on win
 // ---------------------------------------------------------------------------
 
 @Composable
 private fun TileCell(
+    modifier: Modifier = Modifier,
     number: Int,
     isOpen: Boolean,
     isSelected: Boolean,
+    winProgress: Float,
     onClick: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
+
+    // Gold blends in for closed tiles as the win animation progresses
     val bg = when {
-        !isOpen    -> TileClosed
+        !isOpen    -> lerp(TileClosed, WinGold, winProgress)
         isSelected -> TileSelected
         else       -> TileOpen
     }
-    val textColor = if (!isOpen) Color(0xFF6B6059) else Color.White
+    // Closed tiles fade up to full opacity as they turn gold
+    val tileAlpha = if (!isOpen) 0.6f + 0.4f * winProgress else 1f
 
     Box(
-        modifier = Modifier
-            .size(34.dp)
-            .shadow(if (isOpen) 3.dp else 0.dp, RoundedCornerShape(8.dp))
+        modifier = modifier
+            .aspectRatio(1f)
+            .padding(3.dp)
+            .alpha(tileAlpha)
+            .then(
+                if (isSelected)
+                    Modifier.border(3.dp, CedarRed, RoundedCornerShape(8.dp))
+                else
+                    Modifier
+            )
+            .shadow(if (isOpen) 4.dp else 0.dp, RoundedCornerShape(8.dp))
             .background(bg, RoundedCornerShape(8.dp))
             .clickable(enabled = isOpen) {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -332,16 +411,18 @@ private fun TileCell(
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text       = if (isOpen) number.toString() else "✓",
-            color      = textColor,
-            fontWeight = FontWeight.Bold,
-            fontSize   = 15.sp,
+            text       = number.toString(),      // always show the number
+            color      = if (!isOpen)
+                lerp(Color(0xFF6B6059), WoodDark, winProgress)
+                         else Color.White,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize   = 14.sp,
         )
     }
 }
 
 // ---------------------------------------------------------------------------
-// DieFace – Canvas dots on white rounded card
+// DieFace – Canvas dots on white card, parameterised size
 // ---------------------------------------------------------------------------
 
 private val dieDots = mapOf(
@@ -354,18 +435,18 @@ private val dieDots = mapOf(
 )
 
 @Composable
-private fun DieFace(value: Int) {
+private fun DieFace(value: Int, tileSize: Dp = 90.dp) {
     Box(
         modifier = Modifier
-            .size(72.dp)
-            .shadow(6.dp, RoundedCornerShape(14.dp))
-            .background(Color.White, RoundedCornerShape(14.dp))
-            .padding(10.dp),
+            .size(tileSize)
+            .shadow(8.dp, RoundedCornerShape(16.dp))
+            .background(Color.White, RoundedCornerShape(16.dp))
+            .padding(12.dp),
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val r = size.minDimension * 0.12f
+            val dotRadius = size.minDimension * 0.12f
             dieDots[value]?.forEach { (rx, ry) ->
-                drawCircle(DotInk, radius = r, center = Offset(size.width * rx, size.height * ry))
+                drawCircle(DotInk, radius = dotRadius, center = Offset(size.width * rx, size.height * ry))
             }
         }
     }
@@ -394,7 +475,7 @@ private fun CombinationPill(combo: List<Int>, isActive: Boolean, onClick: () -> 
 }
 
 // ---------------------------------------------------------------------------
-// OkayButton – Confirm haptic on successful press
+// OkayButton
 // ---------------------------------------------------------------------------
 
 @Composable
@@ -425,6 +506,144 @@ private fun OkayButton(enabled: Boolean, onClick: () -> Unit) {
 }
 
 // ---------------------------------------------------------------------------
+// WinDialog – AlertDialog overlay, shown when all 9 tiles are shut
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun WinDialog(
+    turnCount: Int,
+    onNewGame: () -> Unit,
+    onShowHighscores: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {},   // intentional: player must press a button
+        containerColor   = WoodContainer,
+        title = {
+            Text(
+                "🎊 Perfekt!",
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize   = 26.sp,
+                color      = TileOpen,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Alle 9 Klappen geschlossen!",
+                    fontWeight = FontWeight.SemiBold,
+                    color      = PillText,
+                )
+                Text("Züge: $turnCount", color = PillText)
+                HorizontalDivider(color = PillBgActive, modifier = Modifier.padding(vertical = 4.dp))
+                Text("Score gespeichert ✓", color = OkayActive, fontSize = 13.sp)
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onNewGame,
+                colors  = ButtonDefaults.buttonColors(containerColor = TileOpen),
+            ) { Text("Neues Spiel") }
+        },
+        dismissButton = {
+            TextButton(onClick = onShowHighscores) {
+                Text("Bestenliste", color = TileOpen, fontWeight = FontWeight.SemiBold)
+            }
+        },
+    )
+}
+
+// ---------------------------------------------------------------------------
+// HighscoreScreen – full-screen overlay
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun HighscoreScreen(highscores: List<Int>, onBack: () -> Unit) {
+    Scaffold(containerColor = BgCream) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // Back button + title
+            Row(
+                verticalAlignment    = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(TileOpen)
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("←", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(
+                    "Bestenliste",
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize   = 28.sp,
+                    color      = TileOpen,
+                )
+            }
+
+            HorizontalDivider(color = PillBgActive)
+
+            if (highscores.isEmpty()) {
+                Text(
+                    "Noch keine abgeschlossenen Spiele.\nSpiel ein Spiel, um deinen ersten Score zu speichern!",
+                    color      = PillText,
+                    lineHeight = 24.sp,
+                )
+            } else {
+                highscores.forEachIndexed { index, score ->
+                    Card(
+                        colors   = CardDefaults.cardColors(containerColor = PillBg),
+                        shape    = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier              = Modifier
+                                .padding(horizontal = 20.dp, vertical = 14.dp)
+                                .fillMaxWidth(),
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment     = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text     = when (index) { 0 -> "🥇"; 1 -> "🥈"; 2 -> "🥉"; else -> "#${index + 1}" },
+                                    fontSize = 22.sp,
+                                )
+                                Text(
+                                    text       = if (score == 0) "Alle geschlossen!" else "$score Punkte",
+                                    fontWeight = FontWeight.SemiBold,
+                                    color      = PillText,
+                                )
+                            }
+                            if (score == 0) Text("🏆", fontSize = 20.sp)
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.weight(1f))
+            Text(
+                "Niedrigerer Score = besser  ·  0 = alle Klappen zu",
+                style = MaterialTheme.typography.bodySmall,
+                color = PillText.copy(alpha = 0.55f),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Previews
 // ---------------------------------------------------------------------------
 
@@ -434,38 +653,51 @@ private fun PreviewMidGame() {
     ShutTheBoxTheme {
         GameScreen(
             state = GameState(
-                openTiles            = setOf(1, 2, 3, 4, 5, 6, 7),
-                selectedTiles        = setOf(3, 4),
-                dice                 = Pair(3, 4),
+                openTiles             = setOf(1, 2, 3, 4, 5, 6, 7),
+                selectedTiles         = setOf(3, 4),
+                dice                  = Pair(3, 4),
                 availableCombinations = listOf(listOf(7), listOf(3, 4), listOf(2, 5), listOf(1, 2, 4)),
-                hasRolled            = true,
+                hasRolled             = true,
             ),
             onRollDice           = {},
             onToggleTile         = {},
             onPreviewCombination = {},
             onConfirm            = {},
             onReset              = {},
+            onToggleHighscores   = {},
         )
     }
 }
 
-@Preview(showBackground = true, name = "Game Over")
+@Preview(showBackground = true, name = "Spiel vorbei (Niederlage)")
 @Composable
 private fun PreviewGameOver() {
     ShutTheBoxTheme {
         GameScreen(
             state = GameState(
-                openTiles            = setOf(3, 5),
-                dice                 = null,
+                openTiles             = setOf(3, 5),
+                dice                  = null,
                 availableCombinations = emptyList(),
-                hasRolled            = true,
-                isGameOver           = true,
+                hasRolled             = true,
+                isGameOver            = true,
             ),
             onRollDice           = {},
             onToggleTile         = {},
             onPreviewCombination = {},
             onConfirm            = {},
             onReset              = {},
+            onToggleHighscores   = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Bestenliste")
+@Composable
+private fun PreviewHighscores() {
+    ShutTheBoxTheme {
+        HighscoreScreen(
+            highscores = listOf(0, 3, 7, 12, 21),
+            onBack     = {},
         )
     }
 }
