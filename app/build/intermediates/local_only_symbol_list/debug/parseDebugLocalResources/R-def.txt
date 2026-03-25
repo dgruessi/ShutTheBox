@@ -1,0 +1,12 @@
+R_DEF: Internal format may change without notice
+local
+raw dice_roll_1
+raw dice_roll_2
+raw dice_roll_3
+raw four_drops
+raw setup_board
+raw single_drop
+raw sound_setup_intervals
+raw three_drops
+raw two_drops
+style Theme.ShutTheBox

@@ -1,0 +1,38 @@
+[
+    {
+        "merged": "com.example.shutthebox.app-debug-45:/raw_sound_setup_intervals.png.flat",
+        "source": "com.example.shutthebox.app-main-47:/raw/sound_setup_intervals.png"
+    },
+    {
+        "merged": "com.example.shutthebox.app-debug-45:/raw_dice_roll_3.wav.flat",
+        "source": "com.example.shutthebox.app-main-47:/raw/dice_roll_3.wav"
+    },
+    {
+        "merged": "com.example.shutthebox.app-debug-45:/raw_single_drop.wav.flat",
+        "source": "com.example.shutthebox.app-main-47:/raw/single_drop.wav"
+    },
+    {
+        "merged": "com.example.shutthebox.app-debug-45:/raw_dice_roll_2.wav.flat",
+        "source": "com.example.shutthebox.app-main-47:/raw/dice_roll_2.wav"
+    },
+    {
+        "merged": "com.example.shutthebox.app-debug-45:/raw_three_drops.wav.flat",
+        "source": "com.example.shutthebox.app-main-47:/raw/three_drops.wav"
+    },
+    {
+        "merged": "com.example.shutthebox.app-debug-45:/raw_dice_roll_1.wav.flat",
+        "source": "com.example.shutthebox.app-main-47:/raw/dice_roll_1.wav"
+    },
+    {
+        "merged": "com.example.shutthebox.app-debug-45:/raw_two_drops.wav.flat",
+        "source": "com.example.shutthebox.app-main-47:/raw/two_drops.wav"
+    },
+    {
+        "merged": "com.example.shutthebox.app-debug-45:/raw_four_drops.wav.flat",
+        "source": "com.example.shutthebox.app-main-47:/raw/four_drops.wav"
+    },
+    {
+        "merged": "com.example.shutthebox.app-debug-45:/raw_setup_board.wav.flat",
+        "source": "com.example.shutthebox.app-main-47:/raw/setup_board.wav"
+    }
+]
